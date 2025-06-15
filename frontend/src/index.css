@@ -1,0 +1,21 @@
+/* ページ全体の基本的な設定 */
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  
+  /* ↓↓↓↓ ここからが重要！ ↓↓↓↓ */
+  background-color: #f0f2f5; /* Figmaで決めた、少しクリームがかった背景色 */
+  color: #1c1e21; /* Figmaで決めた、真っ黒ではない、少し柔らかい文字色 */
+}
+
+/* アプリ全体のコンテナ */
+#root {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+}

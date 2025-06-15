@@ -1,0 +1,35 @@
+/* FeedPage.css */
+.feed-container {
+  width: 100%;
+  max-width: 600px;
+  margin: 2rem auto;
+}
+
+.feed-container h2 {
+  text-align: center;
+  margin-bottom: 2rem;
+  color: #374151;
+}
+
+.post-card {
+  background-color: white;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.post-author {
+  font-weight: bold;
+  margin-bottom: 1rem;
+  color: #1f2937;
+}
+
+.post-content {
+  margin-bottom: 1rem;
+  line-height: 1.6;
+}
+
+.post-card audio {
+  width: 100%;
+}
