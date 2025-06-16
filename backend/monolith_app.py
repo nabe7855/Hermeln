@@ -7,6 +7,7 @@ from flask_cors import CORS
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 from openai import OpenAI
+from datetime import datetime
 
 # --- アプリの作成と設定 ---
 app = Flask(__name__)
@@ -46,6 +47,13 @@ class AudioPost(db.Model):
 
     def __repr__(self):
             return f'<AudioPost {self.id}>'
+
+class Comment(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    body = db.Column(db.String(140))
+    timestamp = db.Column(db.DateTime, index=True, default=datetime.utcnow)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'))
+    post_id = db.Column(db.Integer, db.ForeignKey('audio_post.id'))
 
 # --- APIの定義 ---
 @app.route('/api/users/register', methods=['POST'])
@@ -149,13 +157,50 @@ def get_posts():
     posts = AudioPost.query.order_by(AudioPost.id.desc()).all()
     posts_data = []
     for post in posts:
+        # この投稿に紐づくコメントを取得
+        comments = Comment.query.filter_by(post_id=post.id).order_by(Comment.timestamp.asc()).all()
+        comments_data = []
+        for comment in comments:
+            # コメント投稿者のUserオブジェクトを取得
+            comment_author = User.query.get(comment.user_id)
+            comments_data.append({
+                'id': comment.id,
+                'body': comment.body,
+                'timestamp': comment.timestamp.isoformat() + 'Z',
+                'author_username': comment_author.username if comment_author else 'Unknown'
+            })
+        
         posts_data.append({
             'id': post.id,
             'text_content': post.text_content,
             'audio_url': url_for('uploaded_file', filename=post.audio_filename, _external=True),
-            'author_username': post.author.username # "author" から "author_username" に修正
+            'author_username': post.author.username,
+            'comments': comments_data  # コメントのリストを追加！
         })
     return jsonify(posts_data)
+
+@app.route('/api/posts/<int:post_id>/comments', methods=['POST'])
+def add_comment(post_id):
+    # どの投稿に対するコメントかを確認
+    post = AudioPost.query.get_or_404(post_id)
+    data = request.get_json() or {}
+
+    # 必要なデータがあるかチェック
+    if 'body' not in data or 'user_id' not in data:
+        return jsonify({'error': 'Missing data'}), 400
+
+    # 新しいコメントのインスタンスを作成
+    comment = Comment(
+        body=data['body'],
+        user_id=data['user_id'],
+        post_id=post.id  # この投稿に関連付ける
+    )
+
+    # データベースにコメントを追加して、保存を確定する
+    db.session.add(comment)
+    db.session.commit()
+
+    return jsonify({'message': 'Comment added successfully'}), 201
 
 # --- 起動スイッチ ---
 if __name__ == '__main__':

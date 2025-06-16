@@ -33,3 +33,16 @@
 .post-card audio {
   width: 100%;
 }
+
+.comments-section {
+  margin-top: 1.5rem;
+  border-top: 1px solid #e5e7eb;
+  padding-top: 1rem;
+}
+
+.comment {
+  background-color: #f9fafb;
+  padding: 0.75rem;
+  border-radius: 6px;
+  margin-bottom: 0.5rem;
+}

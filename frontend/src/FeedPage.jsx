@@ -3,8 +3,10 @@ import './FeedPage.css';
 
 const FeedPage = () => {
   const [posts, setPosts] = useState([]);
+  const [newComment, setNewComment] = useState({});
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
+ 
 
   useEffect(() => {
     const fetchPosts = async () => {
@@ -29,6 +31,39 @@ const FeedPage = () => {
   if (isLoading) return <div>読み込み中...</div>;
   if (error) return <div>エラー: {error}</div>;
 
+
+const handleCommentSubmit = async (e, postId) => {
+  e.preventDefault();
+  const commentBody = newComment[postId];
+  
+  // TODO: ここに、現在ログインしているユーザーのIDを取得する処理が必要
+  const currentUserId = 1; // とりあえず、1番のユーザーとして仮定
+
+  if (!commentBody || !currentUserId) return;
+
+  try {
+    const response = await fetch(`http://localhost:5000/api/posts/${postId}/comments`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        body: commentBody,
+        user_id: currentUserId,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error('コメントの投稿に失敗しました。');
+    }
+
+    // 成功したら、フィードを再読み込みして、新しいコメントを表示する
+    // (本当は、もっと効率的な方法があるが、まずはこれでOK！)
+    window.location.reload();
+
+  } catch (err) {
+    console.error(err);
+  }
+};
+
     return (
     <div className="feed-container">
       <h2>みんなの投稿</h2>
@@ -42,6 +77,29 @@ const FeedPage = () => {
               <strong>お題:</strong> {post.text_content}
             </div>
             <audio src={post.audio_url} controls />
+
+          <div className="comments-section">
+            <h4>コメント</h4>
+            {post.comments.length > 0 ? (
+              post.comments.map(comment => (
+                <div key={comment.id} className="comment">
+                  <strong>{comment.author_username}:</strong> {comment.body}
+                </div>
+              ))
+            ) : (
+              <p>まだコメントはありません。</p>
+            )}
+          </div>
+
+            <form onSubmit={(e) => handleCommentSubmit(e, post.id)}>
+              <input
+                type="text"
+                placeholder="コメントを追加..."
+                value={newComment[post.id] || ''}
+                onChange={(e) => setNewComment({ ...newComment, [post.id]: e.target.value })}
+              />
+              <button type="submit">送信</button>
+            </form>
           </div>
         ))
       )}
