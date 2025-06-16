@@ -1,7 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import './FeedPage.css';
+import { useAuth } from './context/AuthContext';
+import CommentBox from './Comment';
 
 const FeedPage = () => {
+  const { authUser } = useAuth();
   const [posts, setPosts] = useState([]);
   const [newComment, setNewComment] = useState({});
   const [isLoading, setIsLoading] = useState(true);
@@ -35,16 +38,22 @@ const FeedPage = () => {
 const handleCommentSubmit = async (e, postId) => {
   e.preventDefault();
   const commentBody = newComment[postId];
-  
-  // TODO: ここに、現在ログインしているユーザーのIDを取得する処理が必要
-  const currentUserId = 1; // とりあえず、1番のユーザーとして仮定
+  const currentUserId = authUser ? authUser.userId : null;
+  const currentUsername = authUser ? authUser.username : "匿名";
 
-  if (!commentBody || !currentUserId) return;
+  if (!commentBody || !currentUserId) {
+    console.error("コメント本文がないか、ユーザーがログインしていません。");
+    return;
+  }
 
   try {
+    const token = localStorage.getItem('token');
     const response = await fetch(`http://localhost:5000/api/posts/${postId}/comments`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'x-access-token': token
+      },
       body: JSON.stringify({
         body: commentBody,
         user_id: currentUserId,
@@ -55,14 +64,30 @@ const handleCommentSubmit = async (e, postId) => {
       throw new Error('コメントの投稿に失敗しました。');
     }
 
-    // 成功したら、フィードを再読み込みして、新しいコメントを表示する
-    // (本当は、もっと効率的な方法があるが、まずはこれでOK！)
-    window.location.reload();
+    const data = await response.json();
+    const newPostedComment = data.comment || {
+      id: Date.now(), // フォールバック（サーバーがID返さなかった場合用）
+      body: commentBody,
+      author_username: currentUsername
+    };
+
+    // コメントを該当ポストに追加（リロードなしでUI更新）
+    setPosts(prevPosts =>
+      prevPosts.map(post =>
+        post.id === postId
+          ? { ...post, comments: [...post.comments, newPostedComment] }
+          : post
+      )
+    );
+
+    // コメント入力欄をクリア
+    setNewComment({ ...newComment, [postId]: '' });
 
   } catch (err) {
     console.error(err);
   }
 };
+
 
     return (
     <div className="feed-container">
@@ -82,9 +107,7 @@ const handleCommentSubmit = async (e, postId) => {
             <h4>コメント</h4>
             {post.comments.length > 0 ? (
               post.comments.map(comment => (
-                <div key={comment.id} className="comment">
-                  <strong>{comment.author_username}:</strong> {comment.body}
-                </div>
+                <CommentBox key={comment.id} comment={comment} />
               ))
             ) : (
               <p>まだコメントはありません。</p>

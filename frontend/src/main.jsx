@@ -9,6 +9,8 @@ import './index.css';
 import AiChat from './AiChat.jsx';
 import RecordingPage from './RecordingPage.jsx';
 import FeedPage from './FeedPage.jsx'; 
+import LoginPage from './LoginPage.jsx';
+import { AuthProvider } from './context/AuthContext';
 
 
 // ここで交通ルールを定義する
@@ -22,6 +24,12 @@ const router = createBrowserRouter([
     path: '/register', // 登録ページの住所
     element: <Register />,
   },
+
+  {
+      path: '/login', // ログインページの住所
+      element: <LoginPage />,
+    },
+
   {
     path: '/language-settings', // 言語設定ページの住所
     element: <LanguageSettings />,
@@ -46,6 +54,8 @@ const router = createBrowserRouter([
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
-    <RouterProvider router={router} />
+    <AuthProvider> {/* これでアプリ全体を包む！ */}
+      <RouterProvider router={router} />
+    </AuthProvider>
   </React.StrictMode>
 );

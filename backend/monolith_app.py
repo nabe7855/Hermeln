@@ -8,6 +8,9 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 from openai import OpenAI
 from datetime import datetime
+from datetime import datetime, timedelta, timezone # timedelta, timezone を追加
+import jwt # PyJWT をインポート
+from functools import wraps
 
 # --- アプリの作成と設定 ---
 app = Flask(__name__)
@@ -24,6 +27,27 @@ app.config['OPENAI_API_KEY'] = os.environ.get('OPENAI_API_KEY')
 db = SQLAlchemy(app)
 migrate = Migrate(app, db)
 
+def token_required(f):
+        @wraps(f)
+        def decorated(*args, **kwargs):
+            token = None
+            if 'x-access-token' in request.headers:
+                token = request.headers['x-access-token']
+            
+            if not token:
+                return jsonify({'message': 'Token is missing!'}), 401
+            
+            try:
+                data = jwt.decode(token, app.config['SECRET_KEY'], algorithms=["HS256"])
+                current_user = User.query.get(data['user_id'])
+            except:
+                return jsonify({'message': 'Token is invalid!'}), 401
+            
+            # API関数に、current_user を渡して実行
+            return f(current_user, *args, **kwargs)
+        return decorated
+    
+
 # --- モデルの定義 ---
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -37,6 +61,7 @@ class User(db.Model):
         self.password_hash = generate_password_hash(password)
     def check_password(self, password):
         return check_password_hash(self.password_hash, password)
+    
     
 class AudioPost(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -54,6 +79,7 @@ class Comment(db.Model):
     timestamp = db.Column(db.DateTime, index=True, default=datetime.utcnow)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'))
     post_id = db.Column(db.Integer, db.ForeignKey('audio_post.id'))
+    author = db.relationship('User', backref=db.backref('comments', lazy=True))
 
 # --- APIの定義 ---
 @app.route('/api/users/register', methods=['POST'])
@@ -71,6 +97,38 @@ def register_user():
     db.session.add(user)
     db.session.commit()
     return jsonify({'message': 'User registered successfully', 'user_id': user.id}), 201
+
+# monolith_app.py のAPI定義エリア
+
+@app.route('/api/users/login', methods=['POST'])
+def login():
+    data = request.get_json() or {}
+    if 'email' not in data or 'password' not in data:
+        return jsonify({'error': 'Missing data'}), 400
+
+    # メールアドレスでユーザーを検索
+    user = User.query.filter_by(email=data['email']).first()
+
+    # ユーザーが見つからない、またはパスワードが一致しない場合
+    if user is None or not user.check_password(data['password']):
+        return jsonify({'error': 'Invalid email or password'}), 401 # 401 Unauthorized
+
+    # ログイン成功！認証トークン（JWT）を生成する
+    token = jwt.encode(
+        {
+            'user_id': user.id,
+            'exp': datetime.now(timezone.utc) + timedelta(hours=24) # トークンの有効期限（例：24時間）
+        },
+        app.config['SECRET_KEY'],
+        algorithm="HS256"
+    )
+
+    return jsonify({
+        'message': 'Login successful',
+        'token': token,
+        'user_id': user.id,
+        'username': user.username
+    })
 
 
 @app.route('/api/users/<int:id>', methods=['GET'])
@@ -161,13 +219,11 @@ def get_posts():
         comments = Comment.query.filter_by(post_id=post.id).order_by(Comment.timestamp.asc()).all()
         comments_data = []
         for comment in comments:
-            # コメント投稿者のUserオブジェクトを取得
-            comment_author = User.query.get(comment.user_id)
             comments_data.append({
                 'id': comment.id,
                 'body': comment.body,
                 'timestamp': comment.timestamp.isoformat() + 'Z',
-                'author_username': comment_author.username if comment_author else 'Unknown'
+                'author_username': comment.author.username if comment.author else 'Unknown'
             })
         
         posts_data.append({
@@ -180,27 +236,32 @@ def get_posts():
     return jsonify(posts_data)
 
 @app.route('/api/posts/<int:post_id>/comments', methods=['POST'])
-def add_comment(post_id):
-    # どの投稿に対するコメントかを確認
+@token_required
+def add_comment(current_user, post_id): # 引数に current_user を追加
     post = AudioPost.query.get_or_404(post_id)
     data = request.get_json() or {}
-
-    # 必要なデータがあるかチェック
-    if 'body' not in data or 'user_id' not in data:
+    if 'body' not in data: # user_idはもう不要
         return jsonify({'error': 'Missing data'}), 400
+    
 
     # 新しいコメントのインスタンスを作成
     comment = Comment(
-        body=data['body'],
-        user_id=data['user_id'],
-        post_id=post.id  # この投稿に関連付ける
-    )
-
-    # データベースにコメントを追加して、保存を確定する
+        body=data['body'], 
+        user_id=current_user,
+        post_id=post.id
+        )
+    
     db.session.add(comment)
     db.session.commit()
-
-    return jsonify({'message': 'Comment added successfully'}), 201
+    return jsonify({
+    'message': 'Comment added successfully',
+    'comment': {
+        'id': comment.id,
+        'body': comment.body,
+        'timestamp': comment.timestamp.isoformat() + 'Z',
+        'author_username': current_user.username
+    }
+}), 201
 
 # --- 起動スイッチ ---
 if __name__ == '__main__':
